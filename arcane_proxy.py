@@ -3,7 +3,6 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageChops, ImageWin
 from escpos import *
 from escpos.printer import *
-from win32 import win32print
 import StarTSPImage
 import subprocess
 from requests import get
@@ -62,17 +61,24 @@ def print_card(card, quantity):
     height = original_card.height
     card_drawing = ImageDraw.Draw(original_card)
     card_drawing.point((width, height), fill=(0, 0, 0))
-    font = ImageFont.truetype("arial.ttf", 80)  # You can specify the font and size you prefer
-    font_s = ImageFont.truetype("arial.ttf", 40)  # You can specify the font and size you prefer
+    font_name = "trebuc.ttf"
+    while(1):
+        try:
+            font = ImageFont.truetype(font_name, 80)  # You can specify the font and size you prefer
+            font_s = ImageFont.truetype(font_name, 40)  # You can specify the font and size you prefer
+            break
+        except OSError:
+            logging.error("Font not installed. Type the name of a .ttf you have installed: ")
+            font_name = input("> ")
     # TODO: Construct full card proxy with set code, etc, all aligned and resized
     #card_drawing.rectangle((0, 180, height, width), fill=(255, 255, 255))
     try:
-        card_drawing.text((0, 0), card['mana_cost'], fill=(0, 0, 0), font=ImageFont.truetype("arial.ttf", round(78-len(card['mana_cost']))), stroke_width=2)
+        card_drawing.text((0, 0), card['mana_cost'], fill=(0, 0, 0), font=ImageFont.truetype(font_name, round(78-len(card['mana_cost']))), stroke_width=2)
     except:
         logging.error("Could not populate CMC")
-    card_drawing.text((10, 85), card['name'], fill=(0, 0, 0), font=ImageFont.truetype("arial.ttf", round(78-len(card['name']))), stroke_width=2)
+    card_drawing.text((10, 85), card['name'], fill=(0, 0, 0), font=ImageFont.truetype(font_name, round(78-len(card['name']))), stroke_width=2)
     #card_drawing.rectangle((0, 500, width, height), fill=(255, 255, 255))
-    card_drawing.text((10, 500), card['type_line'], fill=(0, 0, 0), font=ImageFont.truetype("arial.ttf", round(40-len(card['type_line'])/8)), stroke_width=2)
+    card_drawing.text((10, 500), card['type_line'], fill=(0, 0, 0), font=ImageFont.truetype(font_name, round(40-len(card['type_line'])/8)), stroke_width=2)
     card_drawing.line((0, 550, width, 550), fill=(0, 0, 0), width=2)
     rulestext = ""
     linelength = 0
@@ -126,8 +132,11 @@ def print_card(card, quantity):
             subprocess.call("mspaint /pt card.bmp")
         else:                       # Create a raster and write to /dev/lp0 if running on Linux
             raster = StarTSPImage.imageFileToRaster("card.bmp", True)
-            with open('/dev/usb/lp0', 'wb') as printer:
-                printer.write(raster)
+            try:
+                with open('/dev/usb/lp0', 'wb') as printer:
+                    printer.write(raster)
+            except PermissionError:
+                logging.error("Permission to open printer denied.\nPlease run this application as administrator or grant the user permissions")
 
 def find_card(query):
     card = None
@@ -148,12 +157,12 @@ def find_card(query):
             logging.warn("Card quantity limited to 20")
 
     # Scryfall API endpoint for card search
-    api_url = 'https://api.scryfall.com/cards/search'
+    api_url = 'https://api.scryfall.com/cards/named'
 
     # Parameters for the card search
     params = {
-        'q': query,
-        'unique': 'prints'
+        'fuzzy': query,
+        'unique': 'prints',
     }
 
     # Make the GET request to the Scryfall API
@@ -161,32 +170,37 @@ def find_card(query):
 
     # Check if the request was successful (status code 200)
     if response.status_code == 200:
-        data = response.json()
-        for stuff in data:
-            print(stuff)
+        card_data = response.json()
         # Check if any cards were found
-        if data['total_cards'] > 0:
+        if card_data:
             # Display information about the first card found
-            print(set_code)
-            for printing in data['data']:   # TODO: Fix exact match issue
-                print(printing['set'])
-                if printing['set'] == set_code:
-                    card = printing
-            if card == None:
-                card = data['data'][0]
-            card['quantity'] = card_quantity
-            logging.info(f"Card Name: {card['name']}")
-            logging.info(f"Set: {card['set_name']} ({card['set']})")
-            logging.info(f"Mana Cost: {card['mana_cost']}")
-            logging.info(f"Type: {card['type_line']}")
-            logging.info(f"Oracle Text: {card['oracle_text']}")
-            logging.debug("Found card: %s" %card.keys())
+            
+            if("card_faces" in card_data.keys()):
+                card_data = card_data["card_faces"][0]
+            for stuff in card_data:
+                print(stuff)
+            card_data['quantity'] = card_quantity
+            logging.info(f"Card Name: {card_data['name']}")
+            try:
+                logging.info(f"Set: {card_data['set_name']} ({card_data['set']})")
+            except:
+                logging.warn("Set not found for card: %s", card_data["name"])
+            try:
+                logging.info(f"Mana Cost: {card_data['mana_cost']}")
+            except:
+                card_data['mana_cost'] = "{0}"
+            logging.info(f"Type: {card_data['type_line']}")
+            try:
+                logging.info(f"Oracle Text: {card_data['oracle_text']}")
+            except:
+                card_data['oracle_text'] = "ORACLE TEXT ERROR"
+            logging.debug("Found card: %s" %card_data.keys())
         else:
             logging.error("No matching cards found.")
     else:
         logging.error(f"Error: {response.status_code}")
     
-    return card
+    return card_data
 
 
 if __name__ == "__main__":
@@ -197,7 +211,7 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             logging.info("Received keyboard interrupt - exiting program.")
             break
-        except KeyError:
-            logging.info("DEBUG - failed to fetch, work on this handling!")
+        except KeyError as e:
+            logging.info("DEBUG - failed: %s", e)
         if card is not None:
             print_card(card, card['quantity'])
