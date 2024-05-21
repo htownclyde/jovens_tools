@@ -1,4 +1,5 @@
 import os
+import io
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageChops, ImageWin
 from escpos import *
@@ -7,21 +8,26 @@ import StarTSPImage
 import subprocess
 from requests import get
 from json import loads
+import math
 from shutil import copyfileobj
 import logging
 import os
 import requests
+from PyPDF2 import PdfFileWriter, PdfFileReader
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
+from reportlab.lib.utils import ImageReader
 
 # TODO: REMOVE ALCHEMY!!!
 filedir=os.path.dirname(os.path.abspath(__file__))
 img_path = ""
 
-# Configure the logging module
+# Configure logger
 logging.basicConfig(
-    level=logging.DEBUG,  # Set the logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    filename='example.log',  # Specify the log file name
-    filemode='a'  # Use 'a' to append to the log file, 'w' to overwrite
+    filename='arcane_proxy.log',
+    filemode='a'
 )
 
 # Create a logger
@@ -41,7 +47,9 @@ logger.addHandler(console_handler)
 link_list, image_list = [], []
 image_pointer = 0
 
-def print_card(card, quantity):
+pdf_images = []
+
+def print_card(card, quantity, page_type="Receipt"):    # TODO: Create proper method for handling page type setup/configuration on unix/nt
     card_image_bytes = requests.get(card['image_uris']['art_crop']).content
     original_card = Image.new('RGB', (750, 1040), (255, 255, 255))
     card_image = Image.open(BytesIO(card_image_bytes)).resize((750, 330))
@@ -64,8 +72,8 @@ def print_card(card, quantity):
     font_name = "trebuc.ttf"
     while(1):
         try:
-            font = ImageFont.truetype(font_name, 80)  # You can specify the font and size you prefer
-            font_s = ImageFont.truetype(font_name, 40)  # You can specify the font and size you prefer
+            font = ImageFont.truetype(font_name, 80)
+            font_s = ImageFont.truetype(font_name, 40)
             break
         except OSError:
             logging.error("Font not installed. Type the name of a .ttf you have installed: ")
@@ -123,23 +131,83 @@ def print_card(card, quantity):
     with open('card[\'name\'].txt', 'w') as file:
         file.write(card['name'])
     file.close()
-    for _ in range(quantity):
-        if(os.name == "nt"):        # Call the win32print API if this program is running on Windows
-            #printer_name = win32print.GetDefaultPrinter()
-            #printer_handle = win32print.OpenPrinter(printer_name)
-            #win32print.StartDocPrinter(printer_handle, 1, ("sideboard_guide", None, "raw"))
-            #win32print.WritePrinter(printer_handle, open("card.bmp", 'rb').read())
-            subprocess.call("mspaint /pt card.bmp")
-        else:                       # Create a raster and write to /dev/lp0 if running on Linux
-            raster = StarTSPImage.imageFileToRaster("card.bmp", True)
-            try:
-                with open('/dev/usb/lp0', 'wb') as printer:
-                    printer.write(raster)
-            except PermissionError:
-                logging.error("Permission to open printer denied.\nPlease run this application as administrator or grant the user permissions")
+    for _ in range(quantity):       # TODO: Find a better method for printing on Windows...
+        if(page_type == "Receipt"):
+            if(os.name == "nt"):        # Call a MSPaint print subprocess if this program is running on Windows
+
+                subprocess.call("mspaint /pt card.bmp")
+            else:                       # Create a raster and write to /dev/lp0 if running on Linux
+                raster = StarTSPImage.imageFileToRaster("card.bmp", True)
+                try:
+                    with open('/dev/usb/lp0', 'wb') as printer:
+                        printer.write(raster)
+                except PermissionError:
+                    logging.error("Permission to open printer denied.\nPlease run this application as administrator or grant the user permissions")
+        elif(page_type == "PDF"):
+            pdf_images.append(original_card)
+        else:
+            logging.error("Unknown page type enumeration.")
+    return original_card
+
+def create_collage(rows, columns, images, width=round(6120/2.5), height=round(7920/2.5)):
+    image_sets = []
+    page_images = []
+    images_per_page = rows*columns
+    pages = math.ceil(len(images)/images_per_page)
+    for page in range(pages):
+        image_sets.append([])
+        for i, p in enumerate(images):
+            page = i % images_per_page
+            print(page)
+            im = p.rotate(90)
+            img_box = im.getbbox()
+            im = im.crop(img_box)
+            img_width, img_height = im.size
+            im.thumbnail(im.size)
+            image_sets[len(image_sets)-1].append(im)
+        new_im = Image.new('RGB', (width, height))
+        y_offset = 40
+        i = 0   # Image
+        x = 0
+        y = y_offset
+        for index, page_set in enumerate(image_sets):
+            for col in range(columns):
+                for row in range(rows):
+                    try:
+                        print(i, x, y)
+                        new_im.paste(page_set[i], (x, y))
+                        i += 1
+                        y += img_height + y_offset
+                    except:
+                        logging.warning("fix this indexerror later")
+                x += img_width
+                y = y_offset
+
+            new_im.save("page.bmp")
+            page_images.append(new_im)
+            logging.info("Created page image: %s", index)
+    return page_images
+
+def create_pdf(pdf_images, rows, columns, output_filename="deck.pdf"):
+    pages = create_collage(rows, columns, pdf_images)
+    pdf_canvas = canvas.Canvas(output_filename, pagesize=letter)
+    width, height = letter
+    print("%f %f", width, height)
+    for page in pages:
+        page.save("pdf_image.bmp")
+        img_canvas = canvas.Canvas("img_pdf.pdf", pagesize=letter)
+        img_canvas.drawImage("pdf_image.bmp", 0, 0, width=600, height=820)
+        img_canvas.showPage()
+    img_canvas.save()
+    logging.info("Saving PDF...")
+    try:
+        pdf_canvas.save()
+        logging.info("Saved PDF.")
+    except:
+        logging.error("Failed to save PDF")
 
 def find_card(query):
-    card = None
+    card_data = None
     set_code = None
     card_quantity = 1
     if '[' in query or '(' in query:

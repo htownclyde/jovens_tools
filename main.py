@@ -1,7 +1,6 @@
-import tkinter
 import tkinter.messagebox
-import threading
 import arcane_proxy
+import time
 import customtkinter # TODO: Dearpygui running in a thread
 
 customtkinter.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
@@ -22,44 +21,58 @@ class TirelessTrackerFrame(customtkinter.CTkFrame):
 class ArcaneProxyFrame(customtkinter.CTkFrame):
     def __init__(self, *args, header_name="Arcane Proxy", **kwargs):
         super().__init__(*args, **kwargs)
-        
+
         self.header_name = header_name
 
         self.header = customtkinter.CTkLabel(self, text=self.header_name)
-        self.header.grid(row=0, column=0, padx=10, pady=10)
+        self.header.pack(padx=20, pady=20, anchor=customtkinter.NW, fill=customtkinter.Y)
         ## Tool GUI: arcane_proxy
-        # create main entry and button
-        self.entry = customtkinter.CTkEntry(self, placeholder_text=">")
-        self.entry.grid(row=2, column=0, columnspan=3, padx=(20, 0), pady=(20, 20), sticky="nsew")
-
-        self.print_button = customtkinter.CTkButton(master=self, command=self.print_button_clicked, text="Proxy", fg_color="transparent", border_width=2, text_color=("gray10", "#DCE4EE"))
-        self.print_button.grid(row=3, column=1, padx=(20, 20), pady=(20, 20), sticky="nsew")
 
         self.upload_button = customtkinter.CTkButton(master=self, command=self.upload_button_clicked, text="Load Decklist", fg_color="transparent", border_width=2, text_color=("gray10", "#DCE4EE"))
-        self.upload_button.grid(row=0, column=1, padx=(20, 20), pady=(20, 20), sticky="nsew")
+        self.upload_button.pack(padx=20, pady=20, anchor=customtkinter.W, fill=customtkinter.Y)
 
-        # create textbox
         self.textbox = customtkinter.CTkTextbox(self)
-        self.textbox.grid(row=1, column=0, columnspan=3, sticky="nsew")
-
-        # Set default values
+        self.textbox.pack(padx=20, pady=20, fill=customtkinter.BOTH)
         self.textbox.insert("0.0", "")
+        
+        self.entry = customtkinter.CTkEntry(self, placeholder_text=">", width=200)
+        self.entry.pack(padx=20, pady=20, anchor=customtkinter.SW, fill=customtkinter.Y)
+        
+        self.print_button = customtkinter.CTkButton(master=self, command=self.print_button_clicked, text="Proxy", fg_color="transparent", border_width=2, text_color=("gray10", "#DCE4EE"))
+        self.print_button.pack(padx=20, pady=20, anchor=customtkinter.W, fill=customtkinter.Y)
+        
+        # Settings Panel
+        self.print_dropdown_var = customtkinter.StringVar(value="PDF")  # set initial value
+        self.print_dropdown = customtkinter.CTkComboBox(master=self,
+                                            values=["PDF", "Receipt"],
+                                            command=self.combobox_callback,
+                                            variable=self.print_dropdown_var)
+        self.print_dropdown.pack(padx=20, pady=10, anchor=customtkinter.W, fill=customtkinter.Y)
+
+    def combobox_callback(self, choice):
+        print("combobox dropdown clicked: ", choice)
 
     def print_button_clicked(self):
+        page_type = self.print_dropdown.get()
         current_card = self.entry.get()
         current_decklist = self.textbox.get("0.0", customtkinter.END).split("\n")
         if(len(current_card) > 0):
             self.entry.delete(0, 'end')
             card = arcane_proxy.find_card(current_card)
-            if card is not None:
-                arcane_proxy.print_card(card, card['quantity'])
         elif(len(current_decklist) > 0):
+            pdf_images = []
             for line in current_decklist:
                 card = arcane_proxy.find_card(line)
-                if card is not None:
-                    arcane_proxy.print_card(card, card['quantity'])
+                if(page_type == "PDF"):
+                    if card is not None:
+                        for _ in range(card["quantity"]):
+                            pdf_images.append(arcane_proxy.print_card(card, card['quantity'], page_type))
+                    time.sleep(0.1) # Temporary delay so I don't get ratelimited - will likely remove
+            if(page_type == "PDF"):
+                arcane_proxy.create_pdf(pdf_images, 4, 4, "deck.pdf")
+        if(card is not None):
+            arcane_proxy.print_card(card, card['quantity'], page_type)  # TODO: Create classes and config files for printer/page presets
         
-
     def upload_button_clicked(self):
         decklist_file = customtkinter.filedialog.askopenfilename(title="Select a Decklist", filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")])
         with open(decklist_file, "r") as decklist:
