@@ -51,8 +51,8 @@ pdf_images = []
 
 def print_card(card, quantity, page_type="Receipt"):    # TODO: Create proper method for handling page type setup/configuration on unix/nt
     card_image_bytes = requests.get(card['image_uris']['art_crop']).content
-    original_card = Image.new('RGB', (750, 1040), (255, 255, 255))
-    card_image = Image.open(BytesIO(card_image_bytes)).resize((750, 330))
+    original_card = Image.new('RGB', (700, 1040), (255, 255, 255))
+    card_image = Image.open(BytesIO(card_image_bytes)).resize((700, 330))
     original_card.paste(card_image, (0, 160))
     km = (
      -2, -1,  0,

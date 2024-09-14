@@ -56,30 +56,44 @@ class ArcaneProxyFrame(customtkinter.CTkFrame):
         page_type = self.print_dropdown.get()
         current_card = self.entry.get()
         current_decklist = self.textbox.get("0.0", customtkinter.END).split("\n")
+        
         if(len(current_card) > 0):
             self.entry.delete(0, 'end')
             card = arcane_proxy.find_card(current_card)
+        
         elif(len(current_decklist) > 0):
             pdf_images = []
             for line in current_decklist:
                 card = arcane_proxy.find_card(line)
-                if(page_type == "PDF"):
-                    if card is not None:
+            
+                if card is not None:
+                    if(page_type == "PDF"):
                         for _ in range(card["quantity"]):
-                            pdf_images.append(arcane_proxy.print_card(card, card['quantity'], page_type))
-                    time.sleep(0.1) # Temporary delay so I don't get ratelimited - will likely remove
+                            pdf_images.append(arcane_proxy.print_card(card, 1, page_type))
+                    
+                    else:
+                        arcane_proxy.print_card(card, card['quantity'], page_type)
+                
+                time.sleep(0.1) # Temporary delay so I don't get ratelimited - will likely remove
+            
             if(page_type == "PDF"):
                 arcane_proxy.create_pdf(pdf_images, 4, 4, "deck.pdf")
+        
         if(card is not None):
             arcane_proxy.print_card(card, card['quantity'], page_type)  # TODO: Create classes and config files for printer/page presets
         
     def upload_button_clicked(self):
         decklist_file = customtkinter.filedialog.askopenfilename(title="Select a Decklist", filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")])
-        with open(decklist_file, "r") as decklist:
-            decklist = decklist.read()
-            for line in decklist.split('\n'):
-                print(line)
-                self.textbox.insert(customtkinter.END, line + '\n')
+        try:
+            with open(decklist_file, "r") as decklist:
+                decklist = decklist.read()
+                for line in decklist.split('\n'):
+                    print(line)
+                    self.textbox.insert(customtkinter.END, line + '\n')
+        except FileNotFoundError:
+            print("Failed to open: %s", str(decklist_file))
+        except TypeError:
+            print("Deck selection dialogue closed")
 
 class App(customtkinter.CTk):
     def __init__(self):
