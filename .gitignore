@@ -1,7 +1,11 @@
+# Output filetypes
 *.bmp
 *.png
 *.jpg
+
+# Directories
 build/
 dist/
 resources/
 __pycache__/
+misc/
