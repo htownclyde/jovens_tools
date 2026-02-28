@@ -1,26 +1,22 @@
 import os
-import io
+import getpass
+import math
+import argparse
+import logging
+import requests
+import subprocess
+import StarTSPImage
 from io import BytesIO
-from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageChops, ImageWin
+from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from escpos import *
 from escpos.printer import *
-import StarTSPImage
-import subprocess
-from requests import get
-from json import loads
-import math
-from shutil import copyfileobj
-import logging
-import os
-import requests
-from PyPDF2 import PdfFileWriter, PdfFileReader
+
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
 
-# TODO: REMOVE ALCHEMY!!!
 filedir=os.path.dirname(os.path.abspath(__file__))
 img_path = ""
+printer_path = '/dev/usb/lp0'
 
 # Configure logger
 logging.basicConfig(
@@ -31,7 +27,7 @@ logging.basicConfig(
 )
 
 # Create a logger
-logger = logging.getLogger()
+log = logging.getLogger()
 # Create a console handler and set the level to DEBUG
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.DEBUG)
@@ -41,13 +37,40 @@ formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 console_handler.setFormatter(formatter)
 
 # Add the console handler to the logger
-logger.addHandler(console_handler)
+log.addHandler(console_handler)
 
 # TODO: Store images to folders, save file nicknames, lists, etc.
 link_list, image_list = [], []
 image_pointer = 0
 
 pdf_images = []
+
+def setup_udev(printer_path):
+    """Creates udev rule to allow the current user to access the printer."""
+    current_user = getpass.getuser()
+
+    rule_path = f"/etc/udev/rules.d/99-printer-{current_user}.rules"
+    rule_content = f'SUBSYSTEM=="usb", ATTR{printer_path}=="*", OWNER="{current_user}", MODE="0600"\n'
+    
+    try:
+        print(f"Authentication required to give {current_user} permission to print on {printer_path}!")
+        # Use sudo via subprocess to write the rule
+        subprocess.run(
+            ["sudo", "tee", rule_path], 
+            input=rule_content.encode(), 
+            check=True, 
+            capture_output=True
+        )
+        # Reload udev to apply changes
+        subprocess.run(["sudo", "udevadm", "control", "--reload-rules"], check=True)
+        subprocess.run(["sudo", "udevadm", "trigger"], check=True)
+        subprocess.run(["sudo", "chown", f"{current_user}:", printer_path], check=True)
+        subprocess.run(["sudo", "chmod", "0600", printer_path], check=True)
+        print("setup_udev: setup complete")
+    except subprocess.CalledProcessError as e:
+        log.error(f"setup_udev: setup failed: {e}")
+        return False
+    return True
 
 def print_card(card, quantity, page_type="Receipt"):    # TODO: Create proper method for handling page type setup/configuration on unix/nt
     card_image_bytes = requests.get(card['image_uris']['art_crop']).content
@@ -76,14 +99,14 @@ def print_card(card, quantity, page_type="Receipt"):    # TODO: Create proper me
             font_s = ImageFont.truetype(font_name, 40)
             break
         except OSError:
-            logging.error("Font not installed. Type the name of a .ttf you have installed: ")
+            log.error("Font not installed. Type the name of a .ttf you have installed: ")
             font_name = input("> ")
     # TODO: Construct full card proxy with set code, etc, all aligned and resized
     #card_drawing.rectangle((0, 180, height, width), fill=(255, 255, 255))
     try:
         card_drawing.text((0, 0), card['mana_cost'], fill=(0, 0, 0), font=ImageFont.truetype(font_name, round(78-len(card['mana_cost']))), stroke_width=2)
     except:
-        logging.error("Could not populate CMC")
+        log.error("Could not populate CMC")
     card_drawing.text((10, 85), card['name'], fill=(0, 0, 0), font=ImageFont.truetype(font_name, round(78-len(card['name']))), stroke_width=2)
     #card_drawing.rectangle((0, 500, width, height), fill=(255, 255, 255))
     card_drawing.text((10, 500), card['type_line'], fill=(0, 0, 0), font=ImageFont.truetype(font_name, round(40-len(card['type_line'])/8)), stroke_width=2)
@@ -100,7 +123,7 @@ def print_card(card, quantity, page_type="Receipt"):    # TODO: Create proper me
         card_drawing.text((10, 550), rulestext, fill=(0, 0, 0), font=font_s)
         card_drawing.text((11, 550), rulestext, fill=(0, 0, 0), font=font_s)
     except:
-        logging.error("Could not process oracle text for: %s" %card['name'])
+        log.error("Could not process oracle text for: %s" %card['name'])
         card_drawing.text((10, 550), "ERROR: NO ORACLE TEXT LOL", fill=(0, 0, 0), font=font_s)
     try:
         flavortext = ""
@@ -120,7 +143,7 @@ def print_card(card, quantity, page_type="Receipt"):    # TODO: Create proper me
             card_drawing.rectangle((20+width-len(pt)*55, height-100, width, height), fill=(255, 255, 255))
             card_drawing.text((width-len(pt)*35, height-100), pt, fill=(0, 0, 0), font=font, stroke_width=2)
     except:
-        logging.error("Could not populate power or toughness")
+        log.error("Could not populate power or toughness")
     if "Planeswalker" in card['type_line']:
         card_drawing.rectangle((width-120, height-100, width, height), fill=(255, 255, 255))
         card_drawing.text((width-100, height-100), "[{}]".format(card['loyalty']), fill=(0, 0, 0), font=font, stroke_width=2)
@@ -139,14 +162,17 @@ def print_card(card, quantity, page_type="Receipt"):    # TODO: Create proper me
             else:                       # Create a raster and write to /dev/lp0 if running on Linux
                 raster = StarTSPImage.imageFileToRaster("card.bmp", True)
                 try:
-                    with open('/dev/usb/lp0', 'wb') as printer:
-                        printer.write(raster)
+                    with open(printer_path, 'wb') as printer:
+                        if not args.debug:
+                            printer.write(raster)
+                        else:
+                            log.debug(f"print_card: debug mode - skipped print of {card['name']}")
                 except PermissionError:
-                    logging.error("Permission to open printer denied.\nPlease run this application as administrator or grant the user permissions")
+                    setup_udev(printer_path)
         elif(page_type == "PDF"):
             pdf_images.append(original_card)
         else:
-            logging.error("Unknown page type enumeration.")
+            log.error("Unknown page type enumeration.")
     return original_card
 
 def create_collage(rows, columns, images, width=round(6120/2.5), height=round(7920/2.5)):
@@ -179,13 +205,13 @@ def create_collage(rows, columns, images, width=round(6120/2.5), height=round(79
                         i += 1
                         y += img_height + y_offset
                     except:
-                        logging.warning("fix this indexerror later")
+                        log.warninging("fix this indexerror later")
                 x += img_width
                 y = y_offset
 
             new_im.save("page.bmp")
             page_images.append(new_im)
-            logging.info("Created page image: %s", index)
+            log.info("Created page image: %s", index)
     return page_images
 
 def create_pdf(pdf_images, rows, columns, output_filename="deck.pdf"):
@@ -199,12 +225,12 @@ def create_pdf(pdf_images, rows, columns, output_filename="deck.pdf"):
         img_canvas.drawImage("pdf_image.bmp", 0, 0, width=600, height=820)
         img_canvas.showPage()
     img_canvas.save()
-    logging.info("Saving PDF...")
+    log.info("Saving PDF...")
     try:
         pdf_canvas.save()
-        logging.info("Saved PDF.")
+        log.info("Saved PDF.")
     except:
-        logging.error("Failed to save PDF")
+        log.error("Failed to save PDF")
 
 def find_card(query):
     card_data = None
@@ -222,9 +248,10 @@ def find_card(query):
         query[0] = query[0].strip("x")
         card_quantity = min(int(query.pop(0)), 20)
         if card_quantity == 20:
-            logging.warn("Card quantity limited to 20")
+            log.warning("Card quantity limited to 20")
 
     # Scryfall API endpoint for card search
+    # TODO: Option to ignore digital-only cards
     api_url = 'https://api.scryfall.com/cards/named'
 
     # Parameters for the card search
@@ -245,41 +272,44 @@ def find_card(query):
             
             if("card_faces" in card_data.keys()):
                 card_data = card_data["card_faces"][0]
-            for stuff in card_data:
-                print(stuff)
+            if args.debug:
+                for key in card_data:
+                    print(f"{key} - {card_data[key]}")
             card_data['quantity'] = card_quantity
-            logging.info(f"Card Name: {card_data['name']}")
+            log.info(f"find_card: card Name: {card_data['name']}")
             try:
-                logging.info(f"Set: {card_data['set_name']} ({card_data['set']})")
+                log.info(f"find_card: set: {card_data['set_name']} ({card_data['set']})")
             except:
-                logging.warn("Set not found for card: %s", card_data["name"])
-            try:
-                logging.info(f"Mana Cost: {card_data['mana_cost']}")
-            except:
-                card_data['mana_cost'] = "{0}"
-            logging.info(f"Type: {card_data['type_line']}")
-            try:
-                logging.info(f"Oracle Text: {card_data['oracle_text']}")
-            except:
-                card_data['oracle_text'] = "ORACLE TEXT ERROR"
-            logging.debug("Found card: %s" %card_data.keys())
+                log.warning("find_card: set not found for card: %s", card_data["name"])
         else:
-            logging.error("No matching cards found.")
+            log.error("find_card: no matching cards found.")
     else:
-        logging.error(f"Error: {response.status_code}")
+        log.error(f"Error: {response.status_code}")
     
     return card_data
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="arcane_proxy arguments")
+    parser.add_argument("--debug", '--verbose', action='store_true', help="enable debug mode")
+    args = parser.parse_args()
+    if args.debug:
+        log.debug("main: debug mode enabled - will not print")
+    try:
+        open(printer_path)
+    except PermissionError:
+        log.error(f"main: failed to open printer - attempting to fix permissions for {printer_path}")
+        setup_udev(printer_path)
+    except Exception as e:
+        log.error(f"main: failed to open printer ({e})")
     while 1:
         card = None
         try:
             card = find_card(input("> "))
         except KeyboardInterrupt:
-            logging.info("Received keyboard interrupt - exiting program.")
+            log.info("Received keyboard interrupt - exiting program.")
             break
         except KeyError as e:
-            logging.info("DEBUG - failed: %s", e)
+            log.info("DEBUG - failed: %s", e)
         if card is not None:
             print_card(card, card['quantity'])
