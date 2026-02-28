@@ -1,6 +1,7 @@
 import os
 import getpass
 import math
+import time
 import argparse
 import logging
 import requests
@@ -18,13 +19,26 @@ filedir=os.path.dirname(os.path.abspath(__file__))
 img_path = ""
 printer_path = '/dev/usb/lp0'
 
-# Configure logger
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    filename='arcane_proxy.log',
-    filemode='a'
-)
+log_directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+if not os.path.exists(log_directory):
+    os.makedirs(log_directory)
+
+log_file = f"arcane_proxy_{round(time.time())}.log"
+
+try:
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        filename=os.path.join(log_directory, log_file),
+        filemode='a'
+    )
+except Exception as e:
+    print("failed to set up logging - trying again without logfile")
+    # Configure logger
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
 
 # Create a logger
 log = logging.getLogger()
@@ -44,6 +58,8 @@ link_list, image_list = [], []
 image_pointer = 0
 
 pdf_images = []
+
+
 
 def setup_udev(printer_path):
     """Creates udev rule to allow the current user to access the printer."""
