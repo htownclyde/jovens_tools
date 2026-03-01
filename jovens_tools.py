@@ -3,6 +3,44 @@ from arcane_proxy import arcane_proxy
 from tireless_tracker import tireless_tracker
 import time
 import customtkinter # TODO: Dearpygui running in a thread
+import argparse
+import logging
+import os
+from pathlib import Path
+
+log_directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
+if not os.path.exists(log_directory):
+    os.makedirs(log_directory)
+
+log_file = f"{Path(__file__).name}_{round(time.time())}.log"
+
+try:
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        filename=os.path.join(log_directory, log_file),
+        filemode='a'
+    )
+except Exception as e:
+    print("failed to set up logging - trying again without logfile")
+    # Configure logger
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+
+# Create a logger
+log = logging.getLogger()
+# Create a console handler and set the level
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+
+# Create a formatter and attach it to the console handler
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(formatter)
+
+# Add the console handler to the logger
+log.addHandler(console_handler)
 
 customtkinter.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
 customtkinter.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue"
@@ -25,30 +63,42 @@ class ArcaneProxyFrame(customtkinter.CTkFrame):
 
         self.header_name = header_name
 
+        # Configure the grid weights so the textbox expands
+        self.grid_columnconfigure(3, weight=1)
+        self.grid_rowconfigure(2, weight=1)
+
+        # Header
         self.header = customtkinter.CTkLabel(self, text=self.header_name)
-        self.header.pack(padx=20, pady=20, anchor=customtkinter.NW, fill=customtkinter.Y)
-        ## Tool GUI: arcane_proxy
+        self.header.grid(row=0, column=0, padx=20, pady=20, sticky="nw")
 
+        # Upload Button
         self.upload_button = customtkinter.CTkButton(master=self, command=self.upload_button_clicked, text="Load Decklist", fg_color="transparent", border_width=2, text_color=("gray10", "#DCE4EE"))
-        self.upload_button.pack(padx=20, pady=20, anchor=customtkinter.W, fill=customtkinter.Y)
+        self.upload_button.grid(row=1, column=0, padx=20, pady=10, sticky="w")
 
+        # Textbox (set to expand via rowconfigure weight)
         self.textbox = customtkinter.CTkTextbox(self)
-        self.textbox.pack(padx=20, pady=20, fill=customtkinter.BOTH)
+        self.textbox.grid(row=2, column=0, padx=20, pady=10, sticky="nsew", columnspan=2)
         self.textbox.insert("0.0", "")
-        
+
+        # Entry
         self.entry = customtkinter.CTkEntry(self, placeholder_text=">", width=200)
-        self.entry.pack(padx=20, pady=20, anchor=customtkinter.SW, fill=customtkinter.Y)
-        
+        self.entry.grid(row=3, column=0, padx=20, pady=10, sticky="w")
+
+        # Proxy Button
         self.print_button = customtkinter.CTkButton(master=self, command=self.print_button_clicked, text="Proxy", fg_color="transparent", border_width=2, text_color=("gray10", "#DCE4EE"))
-        self.print_button.pack(padx=20, pady=20, anchor=customtkinter.W, fill=customtkinter.Y)
-        
-        # Settings Panel
-        self.print_dropdown_var = customtkinter.StringVar(value="PDF")  # set initial value
+        self.print_button.grid(row=4, column=0, padx=20, pady=10, sticky="w")
+
+        # Momir Button
+        self.momir_button = customtkinter.CTkButton(master=self, command=self.momir_button_cb, text="Momir")
+        self.momir_button.grid(row=4, column=1, padx=20, pady=10, sticky="w")
+
+        # Settings Panel (Dropdown)
+        self.print_dropdown_var = customtkinter.StringVar(value="Receipt")
         self.print_dropdown = customtkinter.CTkComboBox(master=self,
                                             values=["PDF", "Receipt"],
                                             command=self.combobox_callback,
                                             variable=self.print_dropdown_var)
-        self.print_dropdown.pack(padx=20, pady=10, anchor=customtkinter.W, fill=customtkinter.Y)
+        self.print_dropdown.grid(row=5, column=0, padx=20, pady=10, sticky="w")
 
     def combobox_callback(self, choice):
         print("combobox dropdown clicked: ", choice)
@@ -74,6 +124,11 @@ class ArcaneProxyFrame(customtkinter.CTkFrame):
         if(card is not None):
             arcane_proxy.print_card(card, card['quantity'], page_type)  # TODO: Create classes and config files for printer/page presets
         
+    def momir_button_cb(self):
+        cmc = self.entry.get()
+        card = tireless_tracker.momir(cmc)
+        print(f"momir vig found a {card}")
+
     def upload_button_clicked(self):
         decklist_file = customtkinter.filedialog.askopenfilename(title="Select a Decklist", filetypes=[("Text Files", "*.txt"), ("All Files", "*.*")])
         with open(decklist_file, "r") as decklist:
@@ -149,14 +204,60 @@ class App(customtkinter.CTk):
     def arcane_proxy_button_callback(self):
         print("arcane_proxy click")
         self.arcane_proxy_frame.tkraise()
-    
+
     def tireless_tracker_button_callback(self):
         print("tireless_tracker click")
         self.tireless_tracker_frame.tkraise()
 
+parser = argparse.ArgumentParser(description="arcane_proxy arguments")
+parser.add_argument("--debug", "-d", action='store_true', help="enable debug mode")
+parser.add_argument("--gui", "-g", action='store_true', help="launch the gui (wip)")
+args = parser.parse_args()
+if args.debug:
+    log.debug("main: debug mode enabled - will not print cards")
+    log.setLevel(logging.DEBUG)
+
+def cli():
+    help_text = "\n[jovens_tools]\n\n" \
+    "currently supported commands you can try:\n" \
+    "   scry <query>: returns a scryfall search result\n" \
+    "   momir <cmc>: returns a random creature of this cmc\n" \
+    "   printer: someone set us up the printer\n" \
+    "   help: print this menu\n"
+    print(help_text)
+    while (1):
+        try:
+            cmd = input("> ")
+        except KeyboardInterrupt:
+            print("exiting...")
+            break
+        match cmd.split(" ")[0]:
+            case "help":
+                print(help_text)
+            case "momir":
+                cmc = cmd.split(" ")[1]
+                tireless_tracker.momir(cmc)
+            case "scry":
+                query = cmd.split(" ", 1)[1]
+                card = tireless_tracker.parse_card_line(query)
+                card.scry_fetch()
+            case "printer":
+                print("available printers:")
+                printers = arcane_proxy.list_printers()
+                i = 0
+                for printer in printers:
+                    i += 1
+                    print(f"{i}: {printer}")
+                print(f"default: {arcane_proxy.get_default_printer()}\n")
+            case _:
+                print("invalid command, type 'help' to list valid commands")
+
 if __name__ == "__main__":
-    app = App()
-    try:
-        app.mainloop()
-    except KeyboardInterrupt:
-        print("Exiting!")
+    if args.gui:
+        app = App()
+        try:
+            app.mainloop()
+        except KeyboardInterrupt:
+            print("Exiting!")
+    else:
+        cli()
