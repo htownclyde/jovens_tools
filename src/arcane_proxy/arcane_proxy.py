@@ -69,6 +69,10 @@ def get_default_printer():
 
 def setup_udev(printer_path):
     """Creates udev rule to allow the current user to access the printer."""
+    if not os.path.exists(printer_path):
+        log.info(f"setup_udev: printer path {printer_path} does not exist")
+        return False
+    
     current_user = getpass.getuser()
 
     rule_path = f"/etc/udev/rules.d/99-printer-{current_user}.rules"
@@ -324,6 +328,9 @@ def find_card(query):
     return card_data
 
 def test_printer(test_path=printer_path):
+    if not os.path.exists(printer_path):
+        log.info(f"test_printer: printer path {printer_path} does not exist")
+        return False
     log.info(f"test_printer: testing access to printer at {test_path}")
     try:
         with open(test_path):

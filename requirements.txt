@@ -25,3 +25,4 @@ six==1.17.0
 startspimage==0.2.6
 urllib3==2.6.3
 viivakoodi==0.8.0
+prompt_toolkit
