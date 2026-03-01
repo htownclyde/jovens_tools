@@ -38,17 +38,6 @@ except Exception as e:
 
 # Create a logger
 log = logging.getLogger()
-# Create a console handler and set the level
-if not log.handlers:
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-
-    # Create a formatter and attach it to the console handler
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    console_handler.setFormatter(formatter)
-
-    # Add the console handler to the logger
-    log.addHandler(console_handler)
 
 filedir=os.path.dirname(os.path.abspath(__file__))
 img_path = ""
@@ -322,6 +311,20 @@ def find_card(query):
     
     return card_data
 
+def test_printer(test_path=printer_path):
+    log.info(f"test_printer: testing access to printer at {test_path}")
+    try:
+        with open(test_path):
+            log.info(f"test_printer: successfully opened printer at {test_path}")
+    except PermissionError:
+        log.error(f"main: failed to open printer - attempting to fix permissions for {test_path}")
+        setup_udev(test_path)
+        return False
+    except Exception as e:
+        log.error(f"main: failed to open printer ({e})")
+        return False
+    return True
+
 parser = argparse.ArgumentParser(description="arcane_proxy arguments")
 parser.add_argument("--debug", "-d", action='store_true', help="enable debug mode")
 args = parser.parse_args()
@@ -330,13 +333,19 @@ if args.debug:
     log.setLevel(logging.DEBUG)
 
 if __name__ == "__main__":
-    try:
-        open(printer_path)
-    except PermissionError:
-        log.error(f"main: failed to open printer - attempting to fix permissions for {printer_path}")
-        setup_udev(printer_path)
-    except Exception as e:
-        log.error(f"main: failed to open printer ({e})")
+    # Create a console handler and set the level
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+
+    # Create a formatter and attach it to the console handler
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
+
+    # Add the console handler to the logger
+    log.addHandler(console_handler)
+
+    test_printer(printer_path)
+
     while 1:
         card = None
         try:

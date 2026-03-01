@@ -30,18 +30,6 @@ except Exception as e:
 # Create a logger
 log = logging.getLogger()
 
-# Create a console handler and set the level
-if not log.handlers:
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-
-    # Create a formatter and attach it to the console handler
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    console_handler.setFormatter(formatter)
-
-    # Add the console handler to the logger
-    log.addHandler(console_handler)
-
 class card:
     name: str = None
     quantity: int = 1
@@ -139,6 +127,17 @@ if args.debug:
 
 # TODO: Config function to easily manage Scryfall (or DB) search parameter preferences
 if __name__ == "__main__":
+    # Create a console handler and set the level
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+
+    # Create a formatter and attach it to the console handler
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
+
+    # Add the console handler to the logger
+    log.addHandler(console_handler)
+
     intro_string = "Demo: Enter a card name to find it!"
     if args.momir:
         intro_string = "Momir: Enter a CMC for your creature!"
