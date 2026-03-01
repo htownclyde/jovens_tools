@@ -7,6 +7,9 @@ import argparse
 import logging
 import os
 from pathlib import Path
+import subprocess
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import FileHistory
 
 log_directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 if not os.path.exists(log_directory):
@@ -223,17 +226,20 @@ if args.debug:
 
 def cli():
     help_text = "\n[jovens_tools]\n\n" \
-    "currently supported commands you can try:\n" \
+    "some commands you can try:\n" \
     "   scry <query>: returns a scryfall search result\n" \
     "   momir <cmc>: returns a random creature of this cmc\n" \
     "   printer <index>: someone set us up the printer\n" \
     "   query <query>: edit default search query - ex. 't:creature in:paper'\n" \
-    "   help: print this menu\n"
+    "   help: print this menu\n" \
+    "   exit/quit: exit/quit\n"
     print(help_text)
     search_query = f"t:creature in:paper"
+    printer_path = "/dev/usb/lp0"
+    session = PromptSession(history=FileHistory('.history'))
     while (1):
         try:
-            cmd = input("> ")
+            cmd = session.prompt("> ")
         except KeyboardInterrupt:
             print("exiting...")
             break
@@ -261,14 +267,27 @@ def cli():
                 card.scry_fetch()
                 arcane_proxy.print_card(card.card_json)
             case "printer":
-                arcane_proxy.test_printer()
-                print("available printers:")
-                printers = arcane_proxy.list_printers()
-                i = 0
-                for printer in printers:
-                    i += 1
-                    print(f"{i}: {printer}")
-                print(f"default: {arcane_proxy.get_default_printer()}\n")
+                #print("available printers:")
+                #printers = arcane_proxy.list_printers()
+                #i = 0
+                #for printer in printers:
+                #    i += 1
+                #    print(f"{i}: {printer}")
+                #print(f"default: {arcane_proxy.get_default_printer()}\n")
+                #result = subprocess.run(['lsusb'], capture_output=True, text=True, check=True)
+                #lines = result.stdout.strip().split('\n')
+                #printers = [line for line in lines if 'printer' in line.lower() or 'epson' in line.lower()]
+                #print(printers)
+                print(f"current printer path is {printer_path}")
+                try:
+                    new_printer_path = input(f"enter printer /dev/ path (or press enter to skip): ")
+                except KeyboardInterrupt:
+                    ...
+                if (new_printer_path is not ""):
+                    if(arcane_proxy.test_printer(new_printer_path)):
+                        printer_path = new_printer_path
+                        print(f"new path is {printer_path}")
+                print("")
             case "query":
                 print(f"current query is {search_query}")
                 try:
@@ -281,6 +300,10 @@ def cli():
                         print(f"new query is {search_query}")
                 else:
                     print("invalid query - try again")
+            case "exit":
+                break
+            case "quit":
+                break
             case _:
                 print("invalid command, type 'help' to list valid commands")
 
@@ -303,7 +326,10 @@ def main():
         except KeyboardInterrupt:
             print("Exiting!")
     else:
-        cli()
+        try:
+            cli()
+        except KeyboardInterrupt:
+            print("Exiting...")
 
 if __name__ == "__main__":
     main()
