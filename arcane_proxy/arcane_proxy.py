@@ -6,6 +6,7 @@ import argparse
 import logging
 import requests
 import subprocess
+import cups
 import StarTSPImage
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
@@ -37,16 +38,17 @@ except Exception as e:
 
 # Create a logger
 log = logging.getLogger()
-# Create a console handler and set the level to DEBUG
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.DEBUG)
+# Create a console handler and set the level
+if not log.handlers:
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
 
-# Create a formatter and attach it to the console handler
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-console_handler.setFormatter(formatter)
+    # Create a formatter and attach it to the console handler
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
 
-# Add the console handler to the logger
-log.addHandler(console_handler)
+    # Add the console handler to the logger
+    log.addHandler(console_handler)
 
 filedir=os.path.dirname(os.path.abspath(__file__))
 img_path = ""
@@ -57,6 +59,23 @@ link_list, image_list = [], []
 image_pointer = 0
 
 pdf_images = []
+
+def list_printers():
+    printers = {}
+    try:
+        conn = cups.Connection()
+        printers = conn.getPrinters()
+    except RuntimeError as e:
+        print(f"Error connecting to CUPS server: {e}")
+        return False
+    return printers
+
+def get_default_printer():
+    try:
+        conn = cups.Connection()
+        return conn.getDefault()
+    except RuntimeError:
+        return None
 
 def setup_udev(printer_path):
     """Creates udev rule to allow the current user to access the printer."""
@@ -304,7 +323,7 @@ def find_card(query):
     return card_data
 
 parser = argparse.ArgumentParser(description="arcane_proxy arguments")
-parser.add_argument("--debug", '--verbose', action='store_true', help="enable debug mode")
+parser.add_argument("--debug", "-d", action='store_true', help="enable debug mode")
 args = parser.parse_args()
 if args.debug:
     log.debug("main: debug mode enabled - will not print cards")

@@ -29,16 +29,18 @@ except Exception as e:
 
 # Create a logger
 log = logging.getLogger()
-# Create a console handler and set the level to DEBUG
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
 
-# Create a formatter and attach it to the console handler
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-console_handler.setFormatter(formatter)
+# Create a console handler and set the level
+if not log.handlers:
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
 
-# Add the console handler to the logger
-log.addHandler(console_handler)
+    # Create a formatter and attach it to the console handler
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
+
+    # Add the console handler to the logger
+    log.addHandler(console_handler)
 
 class card:
     name: str = None
@@ -47,26 +49,21 @@ class card:
     def __init__(self, name):
         self.name = name
 
-    def scry_fetch(self, query=None, params=None):
+    def scry_fetch(self, query=None, params=None, endpoint="named"):
         """Attempt to fetch the card's info from Scryfall to populate the object"""
         # TODO: Figure out the best way to have multiple avenues of populating the card info (JSON, SQL, scryfall, etc)
         # TODO: This needs to respect set codes (and other things) if already specified
         if not query:
             query = self.name
-            if not query:
-                log.error(f"scry_fetch: failed to find card name - returning")
-                return False
-        
         default_scry_params = {
-            'fuzzy': query,
+            'fuzzy': query if query else None,
             'unique': 'prints',
         }
         if not params:
             params = default_scry_params
-        
         # Scryfall API endpoint for card search
         # TODO: Option to ignore digital-only cards - also make this some kind of modular source class
-        api_url = 'https://api.scryfall.com/cards/named'
+        api_url = f'https://api.scryfall.com/cards/{endpoint}'
 
         log.debug(f"scry_fetch: making request w/ params {params}")
 
@@ -123,8 +120,18 @@ def parse_card_line(query):
     query_card.set_code = set_code
     return query_card
 
+def momir(cmc):
+    momir_card = card(None)
+    search_query = f"t:creature mv:{cmc}"
+    
+    params = {
+        'q': search_query
+    }
+    momir_card.scry_fetch(query=None, params=params, endpoint="random")
+
 parser = argparse.ArgumentParser(description="arcane_proxy arguments")
-parser.add_argument("--debug", '--verbose', action='store_true', help="enable debug mode")
+parser.add_argument("--debug", "-d", action='store_true', help="enable debug mode")
+parser.add_argument("--momir", "-m", action='store_true', help="enable momir mode")
 args = parser.parse_args()
 if args.debug:
     log.debug("main: debug mode enabled - will not print cards")
@@ -132,10 +139,18 @@ if args.debug:
 
 # TODO: Config function to easily manage Scryfall (or DB) search parameter preferences
 if __name__ == "__main__":
-    print("Demo: Enter a card name to find it!")
-    try:
-        query = input("> ")
-    except KeyboardInterrupt:
-        print("Exiting...")
-    query_card = parse_card_line(query)
-    query_card.scry_fetch()
+    intro_string = "Demo: Enter a card name to find it!"
+    if args.momir:
+        intro_string = "Momir: Enter a CMC for your creature!"
+    print(intro_string)
+    while (1):
+        try:
+            query = input("> ")
+        except KeyboardInterrupt:
+            print("Exiting...")
+            break
+        if args.momir:
+            momir(query)
+        else:
+            query_card = parse_card_line(query)
+            query_card.scry_fetch()
