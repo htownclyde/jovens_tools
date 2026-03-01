@@ -30,7 +30,26 @@ except Exception as e:
 # Create a logger
 log = logging.getLogger()
 
+def scry_validate(query):
+    """
+    Checks if a string is a valid Scryfall search query.
+    """
+    base_url = "https://api.scryfall.com/cards/search"
+    params = {"q": query}
+    
+    try:
+        response = requests.get(base_url, params=params)
+        # 200 means the query is valid and parsed
+        if response.status_code == 200:
+            return True
+        else:
+            return False
+    except requests.exceptions.RequestException:
+        # TODO: Handle connection errors
+        return False
+
 class card:
+    card_json = None
     name: str = None
     quantity: int = 1
     set_code: str = None
@@ -60,28 +79,40 @@ class card:
 
         # Check if the request was successful (status code 200)
         if response.status_code == 200:
-            card_data = response.json()
+            card_json = response.json()
 
             # Check if any cards were found
-            if card_data:
+            if card_json:
+                self.card_json = card_json
                 # Display information about the first card found
-                if ("card_faces" in card_data.keys()):
-                    card_data = card_data["card_faces"][0]
+                if ("card_faces" in self.card_json.keys()):
+                    self.card_json = self.card_json["card_faces"][0]
 
                 if args.debug:
-                    for key in card_data:
-                        print(f"{key} - {card_data[key]}")
-                card_data['quantity'] = self.quantity if self.quantity else card_data['quantity']
-                log.info(f"find_card: card Name: {card_data['name']}")
+                    for key in self.card_json:
+                        print(f"{key} - {self.card_json[key]}")
+                self.card_json['quantity'] = self.quantity if self.quantity else self.card_json['quantity']
+                log.info(f"find_card: card Name: {self.card_json['name']}")
 
                 try:
-                    log.info(f"find_card: set: {card_data['set_name']} ({card_data['set']})")
+                    log.info(f"find_card: set: {self.card_json['set_name']} ({self.card_json['set']})")
                 except:
-                    log.warning("find_card: set not found for card: %s", card_data["name"])
+                    log.warning("find_card: set not found for card: %s", self.card_json["name"])
             else:
                 log.error("find_card: no matching cards found.")
         else:
             log.error(f"scry_fetch: got ({response.status_code}) with params {params}")
+
+    def parse_json(self, card_json=None):
+        # TODO: Program needs way cleaner input handling (and validation of data)
+        if not card_json:
+            card_json = self.card_json
+            if not card_json:
+                log.error(f"card: json for {self.name} invalid - {self.card_json}")
+                return False
+        # TODO: Populate card object w/ data from JSON here
+        log.error("UNIMPLEMENTED")
+        # toughness, artist, etc
 
 def parse_card_line(query):
     """Parses queries like '2 Arcbound Ravager (MDN)' from decklists"""
@@ -108,14 +139,16 @@ def parse_card_line(query):
     query_card.set_code = set_code
     return query_card
 
-def momir(cmc):
+def momir(cmc, search_query=f"t:creature in:paper"):
     momir_card = card(None)
-    search_query = f"t:creature mv:{cmc}"
+    # TODO: Easily configurable query objects!
+    search_query += f" mv:{cmc}"
     
     params = {
         'q': search_query
     }
     momir_card.scry_fetch(query=None, params=params, endpoint="random")
+    return momir_card
 
 parser = argparse.ArgumentParser(description="arcane_proxy arguments")
 parser.add_argument("--debug", "-d", action='store_true', help="enable debug mode")

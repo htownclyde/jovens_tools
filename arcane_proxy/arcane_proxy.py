@@ -93,8 +93,12 @@ def setup_udev(printer_path):
         return False
     return True
 
-def print_card(card, quantity, page_type="Receipt"):    # TODO: Create proper method for handling page type setup/configuration on unix/nt
-    card_image_bytes = requests.get(card['image_uris']['art_crop']).content
+def print_card(card, quantity=1, page_type="Receipt"):    # TODO: Create proper method for handling page type setup/configuration on unix/nt
+    try:
+        card_image_bytes = requests.get(card['image_uris']['art_crop']).content
+    except Exception as e:
+        log.error(f"print_card: failed to print due to exception {e}")
+        return False
     original_card = Image.new('RGB', (700, 1040), (255, 255, 255))
     card_image = Image.open(BytesIO(card_image_bytes)).resize((700, 330))
     original_card.paste(card_image, (0, 160))

@@ -227,8 +227,10 @@ def cli():
     "   scry <query>: returns a scryfall search result\n" \
     "   momir <cmc>: returns a random creature of this cmc\n" \
     "   printer <index>: someone set us up the printer\n" \
+    "   query <query>: edit default search query - ex. 't:creature in:paper'\n" \
     "   help: print this menu\n"
     print(help_text)
+    search_query = f"t:creature in:paper"
     while (1):
         try:
             cmd = input("> ")
@@ -240,11 +242,24 @@ def cli():
                 print(help_text)
             case "momir":
                 cmc = cmd.split(" ")[1]
-                tireless_tracker.momir(cmc)
+                cmc = cmc.strip() 
+                try:
+                    # Try converting to an integer
+                    value = int(cmc)
+                    # Check if the integer is positive
+                    if value > 0:
+                        card = tireless_tracker.momir(cmc, search_query)
+                        arcane_proxy.print_card(card.card_json)
+                    else:
+                        print(f"cli: invalid cmc {cmc}")
+                except ValueError:
+                    print(f"cli: invalid cmc {cmc}")
+                    return None
             case "scry":
-                query = cmd.split(" ", 1)[1]
-                card = tireless_tracker.parse_card_line(query)
+                card_query = cmd.split(" ", 1)[1]
+                card = tireless_tracker.parse_card_line(card_query)
                 card.scry_fetch()
+                arcane_proxy.print_card(card.card_json)
             case "printer":
                 arcane_proxy.test_printer()
                 print("available printers:")
@@ -254,6 +269,18 @@ def cli():
                     i += 1
                     print(f"{i}: {printer}")
                 print(f"default: {arcane_proxy.get_default_printer()}\n")
+            case "query":
+                print(f"current query is {search_query}")
+                try:
+                    new_query = cmd.split(" ", 1)[1]
+                except Exception as e:
+                    new_query = input(f"paste the new query (or press enter to skip): ")
+                if (":" in new_query):
+                    if(tireless_tracker.scry_validate(new_query)):
+                        search_query = new_query
+                        print(f"new query is {search_query}")
+                else:
+                    print("invalid query - try again")
             case _:
                 print("invalid command, type 'help' to list valid commands")
 
