@@ -31,16 +31,6 @@ except Exception as e:
 
 # Create a logger
 log = logging.getLogger()
-# Create a console handler and set the level
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
-
-# Create a formatter and attach it to the console handler
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-console_handler.setFormatter(formatter)
-
-# Add the console handler to the logger
-log.addHandler(console_handler)
 
 customtkinter.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
 customtkinter.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue"
@@ -222,7 +212,7 @@ def cli():
     "currently supported commands you can try:\n" \
     "   scry <query>: returns a scryfall search result\n" \
     "   momir <cmc>: returns a random creature of this cmc\n" \
-    "   printer: someone set us up the printer\n" \
+    "   printer <index>: someone set us up the printer\n" \
     "   help: print this menu\n"
     print(help_text)
     while (1):
@@ -242,6 +232,7 @@ def cli():
                 card = tireless_tracker.parse_card_line(query)
                 card.scry_fetch()
             case "printer":
+                arcane_proxy.test_printer()
                 print("available printers:")
                 printers = arcane_proxy.list_printers()
                 i = 0
@@ -253,6 +244,17 @@ def cli():
                 print("invalid command, type 'help' to list valid commands")
 
 if __name__ == "__main__":
+    # Create a console handler and set the level
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+
+    # Create a formatter and attach it to the console handler
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
+
+    # Add the console handler to the logger
+    log.addHandler(console_handler)
+
     if args.gui:
         app = App()
         try:
