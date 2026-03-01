@@ -9,3 +9,4 @@ dist/
 resources/
 __pycache__/
 misc/
+logs/

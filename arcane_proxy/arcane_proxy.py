@@ -230,6 +230,7 @@ def create_collage(rows, columns, images, width=round(6120/2.5), height=round(79
 def create_pdf(pdf_images, rows, columns, output_filename="deck.pdf"):
     pages = create_collage(rows, columns, pdf_images)
     pdf_canvas = canvas.Canvas(output_filename, pagesize=letter)
+    img_canvas = None
     width, height = letter
     print("%f %f", width, height)
     for page in pages:
@@ -237,7 +238,8 @@ def create_pdf(pdf_images, rows, columns, output_filename="deck.pdf"):
         img_canvas = canvas.Canvas("img_pdf.pdf", pagesize=letter)
         img_canvas.drawImage("pdf_image.bmp", 0, 0, width=600, height=820)
         img_canvas.showPage()
-    img_canvas.save()
+    if img_canvas:
+        img_canvas.save()
     log.info("Saving PDF...")
     try:
         pdf_canvas.save()
@@ -301,14 +303,14 @@ def find_card(query):
     
     return card_data
 
+parser = argparse.ArgumentParser(description="arcane_proxy arguments")
+parser.add_argument("--debug", '--verbose', action='store_true', help="enable debug mode")
+args = parser.parse_args()
+if args.debug:
+    log.debug("main: debug mode enabled - will not print cards")
+    log.setLevel(logging.DEBUG)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="arcane_proxy arguments")
-    parser.add_argument("--debug", '--verbose', action='store_true', help="enable debug mode")
-    args = parser.parse_args()
-    if args.debug:
-        log.debug("main: debug mode enabled - will not print cards")
-        log.setLevel(logging.DEBUG)
     try:
         open(printer_path)
     except PermissionError:
