@@ -1,3 +1,5 @@
+from escpos import *
+from escpos.printer import *
 import os
 import getpass
 import math
@@ -10,8 +12,7 @@ import cups
 import StarTSPImage
 from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
-from escpos import *
-from escpos.printer import *
+
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 

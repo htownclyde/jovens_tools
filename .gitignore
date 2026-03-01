@@ -10,3 +10,4 @@ resources/
 __pycache__/
 misc/
 logs/
+*.egg-info/
