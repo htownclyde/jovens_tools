@@ -11,13 +11,8 @@ from io import BytesIO
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 from escpos import *
 from escpos.printer import *
-
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
-
-filedir=os.path.dirname(os.path.abspath(__file__))
-img_path = ""
-printer_path = '/dev/usb/lp0'
 
 log_directory = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 if not os.path.exists(log_directory):
@@ -27,7 +22,7 @@ log_file = f"arcane_proxy_{round(time.time())}.log"
 
 try:
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s',
         filename=os.path.join(log_directory, log_file),
         filemode='a'
@@ -36,7 +31,7 @@ except Exception as e:
     print("failed to set up logging - trying again without logfile")
     # Configure logger
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
 
@@ -53,13 +48,15 @@ console_handler.setFormatter(formatter)
 # Add the console handler to the logger
 log.addHandler(console_handler)
 
+filedir=os.path.dirname(os.path.abspath(__file__))
+img_path = ""
+printer_path = '/dev/usb/lp0'
+
 # TODO: Store images to folders, save file nicknames, lists, etc.
 link_list, image_list = [], []
 image_pointer = 0
 
 pdf_images = []
-
-
 
 def setup_udev(printer_path):
     """Creates udev rule to allow the current user to access the printer."""
@@ -310,7 +307,8 @@ if __name__ == "__main__":
     parser.add_argument("--debug", '--verbose', action='store_true', help="enable debug mode")
     args = parser.parse_args()
     if args.debug:
-        log.debug("main: debug mode enabled - will not print")
+        log.debug("main: debug mode enabled - will not print cards")
+        log.setLevel(logging.DEBUG)
     try:
         open(printer_path)
     except PermissionError:
