@@ -1,5 +1,6 @@
 import tkinter.messagebox
-import arcane_proxy
+from arcane_proxy import arcane_proxy
+from tireless_tracker import tireless_tracker
 import time
 import customtkinter # TODO: Dearpygui running in a thread
 
@@ -155,4 +156,7 @@ class App(customtkinter.CTk):
 
 if __name__ == "__main__":
     app = App()
-    app.mainloop()
+    try:
+        app.mainloop()
+    except KeyboardInterrupt:
+        print("Exiting!")

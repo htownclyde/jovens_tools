@@ -123,14 +123,15 @@ def parse_card_line(query):
     query_card.set_code = set_code
     return query_card
 
+parser = argparse.ArgumentParser(description="arcane_proxy arguments")
+parser.add_argument("--debug", '--verbose', action='store_true', help="enable debug mode")
+args = parser.parse_args()
+if args.debug:
+    log.debug("main: debug mode enabled - will not print cards")
+    log.setLevel(logging.DEBUG)
+
 # TODO: Config function to easily manage Scryfall (or DB) search parameter preferences
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="arcane_proxy arguments")
-    parser.add_argument("--debug", '--verbose', action='store_true', help="enable debug mode")
-    args = parser.parse_args()
-    if args.debug:
-        log.debug("main: debug mode enabled - will not print cards")
-        log.setLevel(logging.DEBUG)
     print("Demo: Enter a card name to find it!")
     try:
         query = input("> ")
