@@ -284,7 +284,7 @@ def cli():
             case _:
                 print("invalid command, type 'help' to list valid commands")
 
-if __name__ == "__main__":
+def main():
     # Create a console handler and set the level
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
@@ -304,3 +304,6 @@ if __name__ == "__main__":
             print("Exiting!")
     else:
         cli()
+
+if __name__ == "__main__":
+    main()
